@@ -1,8 +1,6 @@
 use libc::{
-    socket, bind, recvfrom, close, setsockopt,
+    bind, c_int, c_void, close, recvfrom, setsockopt, sockaddr, sockaddr_ll, socket, socklen_t,
     AF_PACKET, SOCK_RAW, SOL_SOCKET, SO_RCVBUF,
-    sockaddr, sockaddr_ll, socklen_t,
-    c_void, c_int,
 };
 use std::ffi::CString;
 use std::io::{Error, Result};
@@ -11,10 +9,10 @@ use std::os::unix::io::{AsRawFd, RawFd};
 use tokio::io::unix::AsyncFd;
 use tokio::io::Interest;
 use tokio::sync::mpsc::UnboundedSender;
-use tracing::{info, warn, error, debug, trace};
+use tracing::{debug, error, info, trace, warn};
 
-use crate::packet::{parse_ethernet, parse_ipv4, next_packet_number};
-use crate::tui::{TuiMessage, PacketEntry};
+use crate::packet::{next_packet_number, parse_ethernet, parse_ipv4};
+use crate::tui::{PacketEntry, TuiMessage};
 
 const ETH_P_ALL: u16 = 0x0003;
 const BUFFER_SIZE: usize = 65536;
@@ -34,13 +32,7 @@ impl AsRawFd for PacketSocket {
 impl PacketSocket {
     /// Create a new AF_PACKET socket
     pub fn new() -> Result<Self> {
-        let fd = unsafe {
-            socket(
-                AF_PACKET,
-                SOCK_RAW,
-                (ETH_P_ALL as u16).to_be() as c_int,
-            )
-        };
+        let fd = unsafe { socket(AF_PACKET, SOCK_RAW, (ETH_P_ALL as u16).to_be() as c_int) };
 
         if fd < 0 {
             return Err(Error::last_os_error());
@@ -137,7 +129,10 @@ fn log_packet_info(data: &[u8], len: usize, ifindex: i32, packet_count: u64) {
     }
 
     let Some(eth) = parse_ethernet(data) else {
-        warn!(packet = packet_count, len, "Failed to parse Ethernet header");
+        warn!(
+            packet = packet_count,
+            len, "Failed to parse Ethernet header"
+        );
         return;
     };
 
@@ -176,7 +171,7 @@ pub async fn capture(
     tui_tx: Option<UnboundedSender<TuiMessage>>,
 ) -> Result<()> {
     info!("Creating AF_PACKET socket");
-    
+
     let socket = PacketSocket::new()?;
     info!(fd = socket.as_raw_fd(), "Socket created successfully");
 
@@ -189,9 +184,9 @@ pub async fn capture(
     } else {
         0
     };
-    
+
     let iface_name = interface.clone().unwrap_or_else(|| "all".to_string());
-    
+
     socket.bind_to_interface(ifindex)?;
     if ifindex == 0 {
         info!("Bound to all interfaces");
@@ -207,7 +202,7 @@ pub async fn capture(
 
     // Wrap in AsyncFd for tokio event loop
     let async_fd = AsyncFd::new(socket)?;
-    
+
     info!("Listening for packets (Ctrl+C to stop)");
 
     let mut buffer = vec![0u8; BUFFER_SIZE];
@@ -221,14 +216,11 @@ pub async fn capture(
             match guard.get_inner().recv(&mut buffer) {
                 Ok((len, src_addr)) => {
                     let packet_count = next_packet_number();
-                    
+
                     if let Some(ref tx) = tui_tx {
                         // TUI mode - send to UI
-                        let entry = PacketEntry::from_raw(
-                            packet_count,
-                            &buffer[..len],
-                            iface_name.clone(),
-                        );
+                        let entry =
+                            PacketEntry::from_raw(packet_count, &buffer[..len], iface_name.clone());
                         if tx.send(TuiMessage::Packet(entry)).is_err() {
                             // TUI closed, exit
                             return Ok(());

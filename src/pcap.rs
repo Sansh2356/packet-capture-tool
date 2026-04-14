@@ -1,18 +1,18 @@
+use pcap::{Capture, Device};
 use std::collections::HashMap;
 use std::io::{Error, Result};
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
-use tracing::{info, warn, error, Span};
-use pcap::{Capture, Device};
+use tracing::{error, info, warn, Span};
 
-use crate::packet::{CapturedPacket, handle_packet, create_interface_span, next_packet_number};
-use crate::tui::{TuiMessage, PacketEntry};
+use crate::packet::{create_interface_span, handle_packet, next_packet_number, CapturedPacket};
+use crate::tui::{PacketEntry, TuiMessage};
 
 const BUFFER_SIZE: usize = 65536;
 const RECV_BUF_SIZE: i32 = 1024 * 1024;
 
-// Packet interface containing the interface and the captured packet containing its payload 
+// Packet interface containing the interface and the captured packet containing its payload
 #[derive(Debug)]
 pub struct PacketMessage {
     pub packet: CapturedPacket,
@@ -21,8 +21,7 @@ pub struct PacketMessage {
 
 /// Get all available capture interfaces
 pub fn get_all_interfaces() -> Result<Vec<Device>> {
-    Device::list()
-        .map_err(|e| Error::new(std::io::ErrorKind::Other, e.to_string()))
+    Device::list().map_err(|e| Error::new(std::io::ErrorKind::Other, e.to_string()))
 }
 
 /// Filter interfaces to only include usable ones (up, not loopback unless specified)
@@ -43,7 +42,7 @@ pub fn filter_usable_interfaces(devices: Vec<Device>, include_loopback: bool) ->
         .collect()
 }
 
-/// Thread overseeing the capturing of packets belonging to an interface 
+/// Thread overseeing the capturing of packets belonging to an interface
 struct CaptureThread {
     handle: JoinHandle<()>,
     interface: String,
@@ -54,12 +53,12 @@ fn start_interface_capture(
     filter: Option<String>,
     // Capture from all the interfaces
     promiscuous: bool,
-    // Packet sender to sole packet handler/parser 
+    // Packet sender to sole packet handler/parser
     tx: UnboundedSender<PacketMessage>,
 ) -> Result<JoinHandle<()>> {
     let interface_name = device.name.clone();
     let filter_clone = filter.clone();
-    // Spawning a worker thread mapped to a particular interface listening for packets 
+    // Spawning a worker thread mapped to a particular interface listening for packets
     let handle = thread::spawn(move || {
         // Span attached to each thread-trace specific to interface
         let span = create_interface_span(&interface_name);
@@ -105,11 +104,9 @@ fn start_interface_capture(
         loop {
             match cap.next_packet() {
                 Ok(packet) => {
-                    let captured = CapturedPacket::new(
-                        packet.data.to_vec(),
-                        interface_name.clone(),
-                    );
-                    
+                    let captured =
+                        CapturedPacket::new(packet.data.to_vec(), interface_name.clone());
+
                     let msg = PacketMessage {
                         packet: captured,
                         interface: interface_name.clone(),
@@ -155,13 +152,9 @@ async fn packet_handler(
 
     while let Some(msg) = rx.recv().await {
         if let Some(ref tx) = tui_tx {
-            // Send to TUI 
+            // Send to TUI
             let packet_num = next_packet_number();
-            let entry = PacketEntry::from_raw(
-                packet_num,
-                &msg.packet.data,
-                msg.interface.clone(),
-            );
+            let entry = PacketEntry::from_raw(packet_num, &msg.packet.data, msg.interface.clone());
             if tx.send(TuiMessage::Packet(entry)).is_err() {
                 break;
             }
@@ -171,7 +164,7 @@ async fn packet_handler(
                 .get(&msg.interface)
                 .cloned()
                 .unwrap_or_else(|| create_interface_span(&msg.interface));
-            
+
             handle_packet(msg.packet, &span);
         }
     }
@@ -194,14 +187,14 @@ pub async fn capture(
         // Get all interfaces
         let all_devices = get_all_interfaces()?;
         let filtered = filter_usable_interfaces(all_devices, false);
-        
+
         if filtered.is_empty() {
             return Err(Error::new(
                 std::io::ErrorKind::NotFound,
                 "No usable capture interfaces found",
             ));
         }
-        
+
         filtered
     };
 
