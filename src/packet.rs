@@ -1,4 +1,7 @@
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::{
+    fmt,
+    sync::atomic::{AtomicU64, Ordering},
+};
 use tracing::{debug, info, info_span, warn, Span};
 
 /// Global packet counter
@@ -90,7 +93,7 @@ pub fn parse_ipv4(data: &[u8]) -> Option<Ipv4Info> {
     })
 }
 
-/// TCP header info acting as metadata 
+/// TCP header info acting as metadata
 #[derive(Debug, Clone)]
 pub struct TcpInfo {
     pub src_port: u16,
@@ -115,8 +118,8 @@ pub struct TcpFlags {
     pub cwr: bool,
 }
 
-impl TcpFlags {
-    pub fn to_string(&self) -> String {
+impl fmt::Display for TcpFlags {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut flags = Vec::new();
         if self.syn {
             flags.push("SYN");
@@ -143,14 +146,14 @@ impl TcpFlags {
             flags.push("CWR");
         }
         if flags.is_empty() {
-            "none".to_string()
+            "none".to_string();
         } else {
-            flags.join(",")
+            flags.join(",");
         }
+        write!(f, "{:?}", flags)
     }
 }
-
-/// Parse TCP header after the corresponding network layer PDU has been parsed and removed 
+/// Parse TCP header after the corresponding network layer PDU has been parsed and removed
 pub fn parse_tcp(data: &[u8]) -> Option<TcpInfo> {
     if data.len() < 20 {
         return None;

@@ -32,7 +32,7 @@ impl AsRawFd for PacketSocket {
 impl PacketSocket {
     /// Create a new AF_PACKET socket
     pub fn new() -> Result<Self> {
-        let fd = unsafe { socket(AF_PACKET, SOCK_RAW, (ETH_P_ALL as u16).to_be() as c_int) };
+        let fd = unsafe { socket(AF_PACKET, SOCK_RAW, ETH_P_ALL.to_be() as c_int) };
 
         if fd < 0 {
             return Err(Error::last_os_error());
@@ -62,7 +62,7 @@ impl PacketSocket {
     pub fn bind_to_interface(&self, ifindex: i32) -> Result<()> {
         let mut addr: sockaddr_ll = unsafe { zeroed() };
         addr.sll_family = AF_PACKET as u16;
-        addr.sll_protocol = (ETH_P_ALL as u16).to_be();
+        addr.sll_protocol = ETH_P_ALL.to_be();
         addr.sll_ifindex = ifindex;
 
         let ret = unsafe {
@@ -221,7 +221,7 @@ pub async fn capture(
                         // TUI mode - send to UI
                         let entry =
                             PacketEntry::from_raw(packet_count, &buffer[..len], iface_name.clone());
-                        if tx.send(TuiMessage::Packet(entry)).is_err() {
+                        if tx.send(TuiMessage::Packet(Box::new(entry))).is_err() {
                             // TUI closed, exit
                             return Ok(());
                         }

@@ -21,7 +21,7 @@ pub struct PacketMessage {
 
 /// Get all available capture interfaces
 pub fn get_all_interfaces() -> Result<Vec<Device>> {
-    Device::list().map_err(|e| Error::new(std::io::ErrorKind::Other, e.to_string()))
+    Device::list().map_err(|e| Error::other(e.to_string()))
 }
 
 /// Filter interfaces to only include usable ones (up, not loopback unless specified)
@@ -67,14 +67,14 @@ fn start_interface_capture(
         info!(device = %interface_name, "Starting capture thread");
 
         let cap_result = Capture::from_device(device)
-            .map_err(|e| Error::new(std::io::ErrorKind::Other, e.to_string()))
+            .map_err(|e| Error::other(e.to_string()))
             .and_then(|cap| {
                 cap.promisc(promiscuous)
                     .snaplen(BUFFER_SIZE as i32)
                     .buffer_size(RECV_BUF_SIZE)
                     .timeout(100) // 100ms timeout for responsive shutdown
                     .open()
-                    .map_err(|e| Error::new(std::io::ErrorKind::Other, e.to_string()))
+                    .map_err(|e| Error::other(e.to_string()))
             });
 
         let mut cap = match cap_result {
@@ -155,7 +155,7 @@ async fn packet_handler(
             // Send to TUI
             let packet_num = next_packet_number();
             let entry = PacketEntry::from_raw(packet_num, &msg.packet.data, msg.interface.clone());
-            if tx.send(TuiMessage::Packet(entry)).is_err() {
+            if tx.send(TuiMessage::Packet(Box::new(entry))).is_err() {
                 break;
             }
         } else {
@@ -240,10 +240,7 @@ pub async fn capture(
     }
 
     if capture_threads.is_empty() {
-        return Err(Error::new(
-            std::io::ErrorKind::Other,
-            "Failed to start any capture threads",
-        ));
+        return Err(Error::other("Failed to start any capture threads"));
     }
 
     // Drop the original sender so the channel closes when all threads finish
