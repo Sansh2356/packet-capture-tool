@@ -3,16 +3,16 @@ mod packet;
 mod pcap;
 mod raw;
 mod tui;
-use std::io::Result;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use clap::Parser;
+use std::io::Result;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use tokio::sync::mpsc;
 use tracing::info;
 use tracing_subscriber::{fmt, EnvFilter};
-use tokio::sync::mpsc;
 
 use cli::{Args, CaptureMethod};
-use tui::{TuiMessage, run_tui};
+use tui::{run_tui, TuiMessage};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -23,14 +23,13 @@ async fn main() -> Result<()> {
     let running = Arc::new(AtomicBool::new(true));
 
     if args.tui {
-        // TUI mode 
+        // TUI mode
         run_with_tui(args, running).await
     } else {
         // Standard mode with tracing
         fmt()
             .with_env_filter(
-                EnvFilter::from_default_env()
-                    .add_directive("rustcapture=info".parse().unwrap()),
+                EnvFilter::from_default_env().add_directive("rustcapture=info".parse().unwrap()),
             )
             .with_target(false)
             .with_thread_ids(true)
@@ -39,9 +38,7 @@ async fn main() -> Result<()> {
         info!(method = ?args.method, "Starting packet capture");
 
         match args.method {
-            CaptureMethod::Raw => {
-                raw::capture(args.interface, None).await
-            }
+            CaptureMethod::Raw => raw::capture(args.interface, None).await,
             CaptureMethod::Pcap => {
                 pcap::capture(args.interface, args.filter, args.promiscuous, None).await
             }
@@ -56,11 +53,15 @@ async fn run_with_tui(args: Args, running: Arc<AtomicBool>) -> Result<()> {
     // Spawn capture task
     let capture_handle = tokio::spawn(async move {
         let result = match args.method {
-            CaptureMethod::Raw => {
-                raw::capture(args.interface, Some(tx.clone())).await
-            }
+            CaptureMethod::Raw => raw::capture(args.interface, Some(tx.clone())).await,
             CaptureMethod::Pcap => {
-                pcap::capture(args.interface, args.filter, args.promiscuous, Some(tx.clone())).await
+                pcap::capture(
+                    args.interface,
+                    args.filter,
+                    args.promiscuous,
+                    Some(tx.clone()),
+                )
+                .await
             }
         };
 
