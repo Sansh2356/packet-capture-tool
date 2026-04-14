@@ -48,14 +48,14 @@ impl PacketMetadata {
         let mut lines = Vec::new();
 
         // Ethernet layer
-        lines.push(format!("── Ethernet ──"));
+        lines.push("── Ethernet ──".to_string());
         lines.push(format!("  Src MAC: {}", self.src_mac));
         lines.push(format!("  Dst MAC: {}", self.dst_mac));
         lines.push(format!("  Type: {}", self.ethertype));
 
         // IP layer
         if let Some(ttl) = self.ttl {
-            lines.push(format!("── IP ──"));
+            lines.push("── IP ──".to_string());
             lines.push(format!("  TTL: {}", ttl));
             if let Some(hlen) = self.ip_header_len {
                 lines.push(format!("  Header Len: {} bytes", hlen));
@@ -65,7 +65,7 @@ impl PacketMetadata {
         // Transport layer
         if let (Some(src), Some(dst)) = (self.src_port, self.dst_port) {
             if self.tcp_seq.is_some() {
-                lines.push(format!("── TCP ──"));
+                lines.push("── TCP ──".to_string());
                 lines.push(format!("  Ports: {} → {}", src, dst));
                 if let Some(seq) = self.tcp_seq {
                     lines.push(format!("  Seq: {}", seq));
@@ -80,7 +80,7 @@ impl PacketMetadata {
                     lines.push(format!("  Window: {}", win));
                 }
             } else if self.udp_length.is_some() {
-                lines.push(format!("── UDP ──"));
+                lines.push("── UDP ──".to_string());
                 lines.push(format!("  Ports: {} → {}", src, dst));
                 if let Some(len) = self.udp_length {
                     lines.push(format!("  Length: {}", len));
@@ -90,12 +90,12 @@ impl PacketMetadata {
 
         // ICMP
         if let Some(ref icmp) = self.icmp_type {
-            lines.push(format!("── ICMP ──"));
+            lines.push("── ICMP ──".to_string());
             lines.push(format!("  Type: {}", icmp));
         }
 
         // Payload
-        lines.push(format!("── Payload ──"));
+        lines.push("── Payload ──".to_string());
         lines.push(format!("  Size: {} bytes", self.payload_len));
 
         lines
@@ -106,6 +106,7 @@ impl PacketMetadata {
 #[derive(Clone)]
 pub struct PacketEntry {
     pub number: u64,
+    #[allow(unused)]
     pub timestamp: Instant,
     pub interface: String,
     pub length: usize,
@@ -155,11 +156,7 @@ impl PacketEntry {
                         if let Some(tcp) = parse_tcp(ip_payload) {
                             info = format!(
                                 "{}:{} → {}:{} [{}]",
-                                ipv4.src_ip,
-                                tcp.src_port,
-                                ipv4.dst_ip,
-                                tcp.dst_port,
-                                tcp.flags.to_string()
+                                ipv4.src_ip, tcp.src_port, ipv4.dst_ip, tcp.dst_port, tcp.flags
                             );
 
                             metadata.src_port = Some(tcp.src_port);
@@ -232,7 +229,7 @@ impl PacketEntry {
 
 /// Message for TUI updates
 pub enum TuiMessage {
-    Packet(PacketEntry),
+    Packet(Box<PacketEntry>),
     Quit,
 }
 
@@ -242,7 +239,7 @@ pub struct App {
     pub table_state: TableState,
     pub packet_count: u64,
     pub start_time: Instant,
-    pub running: Arc<AtomicBool>,
+    pub _running: Arc<AtomicBool>,
     pub auto_scroll: bool,
     pub max_packets: usize,
     pub show_detail: bool,
@@ -255,7 +252,7 @@ impl App {
             table_state: TableState::default(),
             packet_count: 0,
             start_time: Instant::now(),
-            running,
+            _running: running,
             auto_scroll: true,
             max_packets: 1000,
             show_detail: false,
@@ -558,7 +555,7 @@ pub async fn run_tui(
         // Check for packet messages (non-blocking)
         while let Ok(msg) = rx.try_recv() {
             match msg {
-                TuiMessage::Packet(entry) => app.add_packet(entry),
+                TuiMessage::Packet(entry) => app.add_packet(*entry),
                 TuiMessage::Quit => {
                     running.store(false, Ordering::SeqCst);
                     break;
