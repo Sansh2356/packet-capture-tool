@@ -2,6 +2,13 @@
 name = "rustcapture"
 version = "0.1.0"
 edition = "2021"
+authors = ["Ansh Sharma <sansh2356@gmail.com>"]
+license = "MIT"
+description = "Packet capture tool"
+readme = "README.md"
+homepage = "https://github.com/Sansh2356/packet-capture-tool"
+repository = "https://github.com/Sansh2356/packet-capture-tool"
+keywords = ["networking"]
 
 [dependencies]
 libc = "0.2.185"
@@ -12,3 +19,8 @@ clap = { version = "4", features = ["derive"] }
 pcap = "2"
 ratatui = "0.28"
 crossterm = "0.28"
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"
